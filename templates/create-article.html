@@ -1,0 +1,16 @@
+<!-- create_article.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Создать статью</title>
+</head>
+<body>
+    <h1>Создать новую статью</h1>
+    <form action="{{ url_for('create_article') }}" method="POST">
+        <textarea name="text" placeholder="Текст статьи" rows="10" required></textarea><br><br>
+        <button type="submit">Создать статью</button>
+    </form>
+    <br>
+    <a href="{{ url_for('posts') }}">← Назад к статьям</a>
+</body>
+</html>
