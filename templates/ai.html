@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport">
+    <title>ИИ Проверка статей</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+        <h1><i class="fas fa-robot"></i>ИИ Проверка статей</h1>
+        </header>
+
+        <div>
+            <button class="tab-link active" onclick="oneTab(event, 'claim')">Проверить утверждение</button>
+            <button class="tab-link" onclick="openTab(event, 'url')">Проверить статью по URL</button>
+        </div>
+
+        <div id="claim" class="tab-content active">
+            <h2><i class="fas fa-quote-right"></i> Проверка утверждения</h2>
+            <div class="input-group">
+                <textarea id="claimInput" placeholder="Введите утверждение для проверки, например: 'Земля плоская'"></textarea>
+                <button onclick="checkClaim()" class="btn-check">
+                    <i class="fas fa-search"></i> Проверить
+                </button>
+            </div>
+        </div>
+
+        <div id="url" class="tab-content">
+            <h2><i class="fas fa-link"></i>Проверка сатей по URL</h2>
+
+            <div class="input-group">
+                <input type="text" id="urlInput" placeholder="https://example.com/article...">
+                <button onclick="checkURL()" class="btn-check"><i class="fas fa-globe"></i>Анализировать Статью</button>
+            </div>
+        </div>
+
+        <div id="results" class="results-section">
+            <h2><i class="fas fa-poll"></i>Результаты проверки</h2>
+            <div id="loading" class="loading">
+                <div class="spinner">
+                    <p>ИИ анализирует информацию...</p>
+                </div>
+                <div id="resultsContent"></div>
+            </div>
+
+        </div>
+    </div>
+    <script>
+        function oneTab(evt,tabName) {
+            var i,tabcontent, tablinks;
+
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.lenght; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+
+            tablinks = document.getElementsByClassName("tab-link");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("active");
+            }
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+
+            document.getElementById("results").style.display = "none";
+        }
+
+        function showLoading() {
+            document.getElementById("loading").style.display = "block";
+            document.getElementById("resultContent").innerHTML = "";
+            document.getElementById("results").style.display = "block";
+        }
+
+        function hideLoading() {
+            document.getElementById("loading").style.display = "none";
+        }
+
+        function checkClaim() {
+            const claim = document.getElementById("claimInput").value.trim();
+            if (!claim) {
+                alert("Введите утверждение для проверки");
+                return;
+            }
+
+            showLoading();
+
+            fetch('/check_claim', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({claim: claim})
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                displayClaimResult(data);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Ошибка при проверке утверждения');
+            });
+        }
+        function checkURL() {
+            const url = document.getElementById("urlInput").value.trim();
+            if (!url) {
+                alert("Введите URL статьи")
+                return;
+            }
+            showLoading();
+
+            fetch('/check_url' {
+                method: 'POST'
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+                body: JSON.stringify({url: url})
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                displayURLResult(data);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Ошибка при анализе статьи');
+            });
+        }
+        function displayClaimResult(data) {
+            let html = '';
+
+            if (data.error) {
+                html = `<div class="error">${data.error}</div>`;
+            } else {
+                const confidenceClass = data.confidence > 70 ? 'high-confidence' :
+                                      data.confidence > 40 ? 'medium-confidence' : 'low-confidence';
+
+                html = `
+                    <div class="result-card">
+                        <div class="claim-header">
+                            <h3><i class="fas fa-quote-left"></i> Проверяемое утверждение:</h3>
+                            <p class="original-claim">"${data.claim}"</p>
+                        </div>
+
+                        <div class="verdict ${confidenceClass}">
+                            <div class="verdict-header">
+                                <h4><i class="fas fa-gavel"></i> Вердикт ИИ:</h4>
+                                <span class="confidence-badge">Уверенность: ${data.confidence}%</span>
+                            </div>
+                            <p><strong>Категория:</strong> ${data.category}</p>
+                            <p><strong>Результат:</strong> ${data.response}</p>
+                        </div>
+                `;
+
+                if (data.similar_facts && data.similar_facts.length > 0) {
+                    html += `<div class="similar-facts">
+                                <h4><i class="fas fa-balance-scale"></i> Похожие известные факты:</h4>`;
+
+                    data.similar_facts.forEach(fact => {
+                        const truthIcon = fact.truth_value === true ?
+                            '<i class="fas fa-check-circle truth-true"></i>' :
+                            fact.truth_value === false ?
+                            '<i class="fas fa-times-circle truth-false"></i>' :
+                            '<i class="fas fa-question-circle truth-unknown"></i>';
+
+                        html += `
+                            <div class="similar-fact">
+                                ${truthIcon}
+                                <span class="similar-fact-text">${fact.fact}</span>
+                                <span class="similarity">Сходство: ${Math.round(fact.similarity * 100)}%</span>
+                            </div>
+                        `;
+                    });
+
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+            }
+
+            document.getElementById("resultsContent").innerHTML = html;
+        }
+
+        function displayURLResult(data) {
+            let html = '';
+
+            if (data.error) {
+                html = `<div class="error">${data.error}</div>`;
+            } else {
+                html = `
+                    <div class="result-card">
+                        <div class="article-info">
+                            <h3><i class="fas fa-newspaper"></i> Информация о статье:</h3>
+                            <p><strong>Заголовок:</strong> ${data.article_info.title || "Не указан"}</p>
+                            <p><strong>Авторы:</strong> ${data.article_info.authors ? data.article_info.authors.join(', ') : "Не указаны"}</p>
+                            <p><strong>Дата публикации:</strong> ${data.article_info.publish_date || "Не указана"}</p>
+                        </div>
+
+                        <h3><i class="fas fa-search"></i> Проверенные утверждения:</h3>
+                `;
+
+                if (data.checked_claims && data.checked_claims.length > 0) {
+                    data.checked_claims.forEach((claim, index) => {
+                        html += `
+                            <div class="claim-result">
+                                <h4>Утверждение ${index + 1}:</h4>
+                                <p class="claim-text">"${claim.claim.substring(0, 150)}..."</p>
+                                <p><strong>Результат:</strong> ${claim.response}</p>
+                                <p><strong>Уверенность:</strong> ${claim.confidence}%</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += `<p class="no-claims">Не удалось извлечь проверяемые утверждения из статьи.</p>`;
+                }
+
+                html += `</div>`;
+            }
+
+            document.getElementById("resultsContent").innerHTML = html;
+        }
+        function analyzeText() {
+            const text = document.getElementById("textInput").value.trim();
+            if (!text || text.length < 10) {
+                alert("Введите текст для анализа (минимум 10 символов)");
+                return;
+            }
+
+            showLoading();
+
+            fetch('/analyze_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({text: text})
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                displayTextResult(data);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Ошибка при анализе текста');
+            });
+        }
+
+        function displayClaimResult(data) {
+            let html = '';
+
+            if (data.error) {
+                html = `<div class="error">${data.error}</div>`;
+            } else {
+                const confidenceClass = data.confidence > 70 ? 'high-confidence' :
+                                      data.confidence > 40 ? 'medium-confidence' : 'low-confidence';
+
+                html = `
+                    <div class="result-card">
+                        <div class="claim-header">
+                            <h3><i class="fas fa-quote-left"></i> Проверяемое утверждение:</h3>
+                            <p class="original-claim">"${data.claim}"</p>
+                        </div>
+
+                        <div class="verdict ${confidenceClass}">
+                            <div class="verdict-header">
+                                <h4><i class="fas fa-gavel"></i> Вердикт ИИ:</h4>
+                                <span class="confidence-badge">Уверенность: ${data.confidence}%</span>
+                            </div>
+                            <p><strong>Категория:</strong> ${data.category}</p>
+                            <p><strong>Результат:</strong> ${data.response}</p>
+                        </div>
+                `;
+
+                if (data.similar_facts && data.similar_facts.length > 0) {
+                    html += `<div class="similar-facts">
+                                <h4><i class="fas fa-balance-scale"></i> Похожие известные факты:</h4>`;
+
+                    data.similar_facts.forEach(fact => {
+                        const truthIcon = fact.truth_value === true ?
+                            '<i class="fas fa-check-circle truth-true"></i>' :
+                            fact.truth_value === false ?
+                            '<i class="fas fa-times-circle truth-false"></i>' :
+                            '<i class="fas fa-question-circle truth-unknown"></i>';
+
+                        html += `
+                            <div class="similar-fact">
+                                ${truthIcon}
+                                <span class="similar-fact-text">${fact.fact}</span>
+                                <span class="similarity">Сходство: ${Math.round(fact.similarity * 100)}%</span>
+                            </div>
+                        `;
+                    });
+
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+            }
+
+            document.getElementById("resultsContent").innerHTML = html;
+        }
+
+        function displayURLResult(data) {
+            let html = '';
+
+            if (data.error) {
+                html = `<div class="error">${data.error}</div>`;
+            } else {
+                html = `
+                    <div class="result-card">
+                        <div class="article-info">
+                            <h3><i class="fas fa-newspaper"></i> Информация о статье:</h3>
+                            <p><strong>Заголовок:</strong> ${data.article_info.title || "Не указан"}</p>
+                            <p><strong>Авторы:</strong> ${data.article_info.authors ? data.article_info.authors.join(', ') : "Не указаны"}</p>
+                            <p><strong>Дата публикации:</strong> ${data.article_info.publish_date || "Не указана"}</p>
+                        </div>
+
+                        <h3><i class="fas fa-search"></i> Проверенные утверждения:</h3>
+                `;
+
+                if (data.checked_claims && data.checked_claims.length > 0) {
+                    data.checked_claims.forEach((claim, index) => {
+                        html += `
+                            <div class="claim-result">
+                                <h4>Утверждение ${index + 1}:</h4>
+                                <p class="claim-text">"${claim.claim.substring(0, 150)}..."</p>
+                                <p><strong>Результат:</strong> ${claim.response}</p>
+                                <p><strong>Уверенность:</strong> ${claim.confidence}%</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += `<p class="no-claims">Не удалось извлечь проверяемые утверждения из статьи.</p>`;
+                }
+
+                html += `</div>`;
+            }
+
+            document.getElementById("resultsContent").innerHTML = html;
+        }
+
+        function displayTextResult(data) {
+            let html = '';
+
+            if (data.error) {
+                html = `<div class="error">${data.error}</div>`;
+            } else {
+                const summary = data.summary;
+                const summaryClass = summary.trust_score > 70 ? 'high-confidence' :
+                                   summary.trust_score > 40 ? 'medium-confidence' : 'low-confidence';
+
+                html = `
+                    <div class="result-card">
+                        <div class="summary ${summaryClass}">
+                            <h3><i class="fas fa-chart-pie"></i> Общая оценка текста</h3>
+                            <div class="summary-stats">
+                                <div class="stat">
+                                    <div class="stat-value">${data.total_claims}</div>
+                                    <div class="stat-label">Утверждений найдено</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${summary.average_confidence}%</div>
+                                    <div class="stat-label">Средняя уверенность</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${summary.trust_score}%</div>
+                                    <div class="stat-label">Оценка достоверности</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${summary.verdict}</div>
+                                    <div class="stat-label">Общий вердикт</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3><i class="fas fa-list-check"></i> Детальный анализ утверждений:</h3>
+                `;
+
+                if (data.claims && data.claims.length > 0) {
+                    data.claims.forEach(claim => {
+                        const confidenceClass = claim.confidence > 70 ? 'high-confidence' :
+                                              claim.confidence > 40 ? 'medium-confidence' : 'low-confidence';
+
+                        html += `
+                            <div class="detailed-claim">
+                                <h4><i class="fas fa-hashtag"></i> Утверждение ${claim.id}:</h4>
+                                <p class="claim-text">"${claim.claim}"</p>
+                                <div class="claim-details ${confidenceClass}">
+                                    <p><strong>Категория:</strong> ${claim.category}</p>
+                                    <p><strong>Результат:</strong> ${claim.response}</p>
+                                    <p><strong>Уверенность анализа:</strong> ${claim.confidence}%</p>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += `<p class="no-claims">Не удалось извлечь проверяемые утверждения из текста.</p>`;
+                }
+
+                html += `</div>`;
+            }
+
+            document.getElementById("resultsContent").innerHTML = html;
+        }
+    </script>
+</body>
+</html>
