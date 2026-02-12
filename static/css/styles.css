@@ -8,21 +8,3 @@ body {
     margin: 0;
     padding: 0;
 }
-
-.h1{
-    color: 99FFCC
-}
-
-a {
-    text-decoration: none;
-    color: #000000
-}
-
-.button{
-    background: ffffff;
-    color: #000000:
-    padding: 10px 20px;
-    border: blue;
-    border-radius: 5px;
-    cursor: pointer;
-}
