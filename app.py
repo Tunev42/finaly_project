@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 load_dotenv()
 
-# Глобальные переменные для моделей
+
 fact_checker = None
 similarity_model = None
 
@@ -38,7 +38,7 @@ with app.app_context():
 
 
 def initialize_models():
-    """Инициализация моделей AI"""
+    
     global fact_checker, similarity_model
 
     if fact_checker is None:
@@ -61,7 +61,7 @@ def initialize_models():
 
 
 def claims_from_text(text):
-    """Извлечение утверждений из текста"""
+    
     if not text:
         return []
 
@@ -72,7 +72,7 @@ def claims_from_text(text):
     claims = []
     for s in sentences:
         s = s.strip()
-        # Оставляем предложения длиной больше 3 слов и не слишком длинные
+        # Оставляем предложения не больше 3 слов и не длиные
         if len(s.split()) > 3 and len(s) < 500 and len(s) > 20:
             claims.append(s)
 
@@ -80,7 +80,7 @@ def claims_from_text(text):
 
 
 def fetch_article_info_simple(url):
-    """Получение информации о статье по URL"""
+    
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -91,21 +91,21 @@ def fetch_article_info_simple(url):
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Удаляем скрипты и стили
+        # Удаление скриптов и стилей
         for script in soup(["script", "style"]):
             script.decompose()
 
-        # Получаем заголовок
+        # Получение заголовка
         title = soup.find('title')
         if title:
             title = title.get_text().strip()
         else:
             title = "Не удалось определить заголовок"
 
-        # Получаем основной текст
+        # Получение основного текста
         text = soup.get_text()
 
-        # Очищаем текст
+        # Очистка текста
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = ' '.join(chunk for chunk in chunks if chunk)
@@ -133,10 +133,10 @@ def fetch_article_info_simple(url):
 
 
 def analyze_claim_with_ai(claim):
-    """Анализ утверждения с помощью AI"""
+    
     fact_checker_model, sim_model = initialize_models()
 
-    # Проверяем, загружены ли модели
+    # Проверка загружены ли модели
     if fact_checker_model is None:
         return {
             "claim": claim,
@@ -180,23 +180,14 @@ def analyze_claim_with_ai(claim):
 
     response_text = responses.get(best_category, " Требуется дополнительная проверка.")
 
-    # База демо-фактов для сравнения
+    # Демо факты для сравнения
     demo_facts = {
-        "Земля плоская": {"truth": False, "explanation": "Научно доказано, что Земля имеет форму геоида"},
-        "COVID-19 вакцины безопасны": {"truth": True,
-                                       "explanation": "Вакцины прошли клинические испытания и одобрены ВОЗ"},
-        "Искусственный интеллект опасен для человечества": {"truth": "Дискуссионно",
-                                                            "explanation": "Тема активно обсуждается в научном сообществе"},
+        "Земля плоская": {"truth": False, "explanation": "Научно доказано, что Земля имеет форму шара"},
         "Вода закипает при 100 градусах Цельсия": {"truth": True, "explanation": "При нормальном атмосферном давлении"},
         "Солнце вращается вокруг Земли": {"truth": False, "explanation": "Земля вращается вокруг Солнца"},
-        "Человек использует только 10% мозга": {"truth": False,
-                                                "explanation": "Мозг активен полностью, но не все части одновременно"},
-        "Вакцины вызывают аутизм": {"truth": False, "explanation": "Многочисленные исследования опровергли эту связь"},
-        "Изменение климата - это миф": {"truth": False,
-                                        "explanation": "Научный консенсус подтверждает изменение климата"},
-        "Сахарин вызывает рак": {"truth": False, "explanation": "Исследования на людях не подтвердили эту связь"},
-        "Мобильные телефоны вызывают рак мозга": {"truth": "Не доказано",
-                                                  "explanation": "Исследования не выявили четкой связи"}
+        "Человек использует только 10% мозга": {"truth": False, "explanation": "Мозг активен полностью, но не все части одновременно"},
+        "Изменение климата - это миф": {"truth": False, "explanation": "Научный консенсус подтверждает изменение климата"},
+        "Мобильные телефоны вызывают рак мозга": {"truth": "Не доказано", "explanation": "Исследования не выявили четкой связи"}
     }
 
     similar_facts = []
@@ -290,7 +281,7 @@ def check_url():
 def analyze_text():
 
     data = request.json
-    text = data.get('text', '').strip()
+    text = data.get('text').strip()
 
     if not text or len(text) < 10:
         return jsonify({"error": "Слишком короткий текст (минимум 10 символов)"})
@@ -441,4 +432,5 @@ if __name__ == '__main__':
     thread.start()
 
     print(" Запуск сервера...")
+
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
