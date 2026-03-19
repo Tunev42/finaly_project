@@ -1,22 +1,32 @@
-from flask import Flask, render_template, url_for, request, redirect, session
+from flask import Flask, render_template, url_for, request, redirect, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from dotenv import load_dotenv
-from exa_factcheck import ExaFactChecker
+from exa_factcheck import FactVerifier
 
 
 app = Flask(__name__)
 load_dotenv()
-fact_checker = ExaFactChecker()
+
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///blog.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'k17m12t12!'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'k17m12t12!')
+app.config['SESSION_TYPE'] = 'filesystem'
+
 db = SQLAlchemy(app)
 
 
+try:
+    fact_checker = FactVerifier(api_key=os.getenv('EXA_API_KEY'))
+except:
+    fact_checker = None
+    print("ВНИМАНИЕ: API ключ не найден или недействителен")
+
+
 class User(db.Model):
-    login = db.Column(db.String(50), primary_key=True)
+    username = db.Column(db.String(50), primary_key=True)
     password_hash = db.Column(db.String(200), nullable=False)
 
     def set_password(self, password):
@@ -34,99 +44,131 @@ def welcome():
 @app.route('/auto', methods=['GET', 'POST'])
 def auto():
     if request.method == "POST":
-        login = request.form['login']
-        password = request.form['password']
+        username = request.form.get('username')
+        password = request.form.get('password')
 
-        existing_user = User.query.get(login)
+        if not username or not password:
+            flash('Заполните все поля')
+            return render_template('auto.html')
+
+        if len(username) < 3 or len(username) > 50:
+            flash('Имя пользователя должно быть от 3 до 50 символов')
+            return render_template('auto.html')
+
+        existing_user = User.query.get(username)
         if existing_user:
-            return "Пользователь с таким логином уже существует существует"
-
-        user = User(login=login)
-        user.set_password(password)
+            flash('Пользователь с таким именем уже существует')
+            return render_template('auto.html')
 
         try:
+            user = User(username=username)
+            user.set_password(password)
             db.session.add(user)
             db.session.commit()
+            flash('Регистрация успешна! Теперь вы можете войти')
             return redirect('/login')
         except Exception as e:
-            return f"Произошла ошибка: {str(e)}"
+            db.session.rollback()
+            flash(f'Ошибка при регистрации: {str(e)}')
+            return render_template('auto.html')
 
     return render_template('auto.html')
-
-
-@app.route('/dashboard')
-def dashboard():
-    if not session.get('logged_in'):
-        return redirect('/login')
-
-    return render_template('dashboard.html', login=session.get('username'))
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == "POST":
-        login = request.form['login']
-        password = request.form['password']
+        username = request.form.get('username')
+        password = request.form.get('password')
 
-        user = User.query.get(login)
+        if not username or not password:
+            flash('Заполните все поля')
+            return render_template('login.html')
+
+        user = User.query.get(username)
 
         if user and user.check_password(password):
-            session['login'] = login
+            session.clear()
+            session['username'] = username
             session['logged_in'] = True
+            flash('Добро пожаловать!')
             return redirect('/dashboard')
         else:
-            return render_template('login.html', error="Неверный логин или пароль")
+            flash('Неверное имя пользователя или пароль')
+            return render_template('login.html')
 
     return render_template('login.html')
+
+
+@app.route('/dashboard')
+def dashboard():
+    if not session.get('logged_in'):
+        flash('Необходимо войти в систему')
+        return redirect('/login')
+
+    return render_template('dashboard.html', username=session.get('username'))
 
 
 @app.route('/logout')
 def logout():
     session.clear()
+    flash('Вы вышли из системы')
     return redirect(url_for('welcome'))
 
 
 @app.route('/ai', methods=['GET', 'POST'])
 def ai():
+    if not session.get('logged_in'):
+        flash('Для проверки фактов необходимо войти в систему')
+        return redirect('/login')
+
     result = None
+    error = None
 
-    text_check = request.form.get('title', '')
-    if text_check:
-        try:
-            verify_result = fact_checker.fact_check(text_check)
+    if request.method == "POST":
+        text = request.form.get('title')
 
-            if verify_result:
-                result = format_results(verify_result)
+        if not text:
+            flash('Введите текст для проверки')
+        elif len(text) > 5000:
+            flash('Текст слишком длинный (максимум 5000 символов)')
+        else:
+            try:
+                if fact_checker:
+                    verification_result = fact_checker.check(text)
+                    result = format_verification_results(verification_result)
+                else:
+                    error = "Сервис проверки временно недоступен"
+            except Exception as e:
+                error = f"Ошибка при проверке: {str(e)}"
 
-            else:
-                result = "Не удалось проверить текст"
-
-        except Exception as e:
-            result = f"Ошибка при проверке: {str(e)}"
-
-    return render_template('ai.html', result=result)
+    return render_template('ai.html', result=result, error=error)
 
 
-def format_results(results):
-    formatted = "РЕЗУЛЬТАТЫ ПРОВЕРКИ ФАКТОВ:\n"
+def format_verification_results(data):
 
-    for i, res in enumerate(results, 1):
-        formatted += f"Утверждение {i}: {res['claim']}\n"
-        formatted += f"Оценка: {res['assessment']}\n"
-        formatted += f"Уверенность: {res['confidence']}%\n"
+    if not data or 'claims' not in data:
+        return "Не удалось получить результаты проверки"
 
-        if res.get('explanation'):
-            formatted += f"Пояснение: {res['explanation']}\n"
+    lines = ["РЕЗУЛЬТАТЫ ПРОВЕРКИ"]
 
-        if res.get('scientific_sources'):
-            formatted += "\nНАУЧНЫЕ ИСТОЧНИКИ:\n"
-            for src in res['scientific_sources']:
-                formatted += f"  • {src}\n"
+    for i, claim in enumerate(data['claims'], 1):
+        lines.extend([
+            f"\n{i}. Утверждение:",
+            f"{claim['text']}",
+            f"Оценка: {claim['verdict']}",
+            f"Достоверность: {claim['confidence']}%"
+        ])
 
-        if not res.get('scientific_sources') and not res.get('pseudoscience_sources'):
-            formatted += "\nНе найдены источники\n"
+        if claim.get('explanation'):
+            lines.append(f"Пояснение: {claim['explanation']}")
 
-    return formatted
+        if claim.get('sources'):
+            lines.append("Источники:")
+            for src in claim['sources'][:3]:
+                lines.append(f"{src}")
+
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
