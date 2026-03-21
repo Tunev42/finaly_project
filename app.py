@@ -85,13 +85,13 @@ def login():
             flash('Заполните все поля')
             return render_template('login.html')
 
-        user = User.query.get(username)
+        user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password):
             session.clear()
             session['username'] = username
+            session.permanent = True
             session['logged_in'] = True
-            flash('Добро пожаловать!')
             return redirect('/dashboard')
         else:
             flash('Неверное имя пользователя или пароль')
@@ -136,7 +136,7 @@ def ai():
             try:
                 if fact_checker:
                     verification_result = fact_checker.check(text)
-                    result = format_verification_results(verification_result)
+                    result = verification_results(verification_result)
                 else:
                     error = "Сервис проверки временно недоступен"
             except Exception as e:
@@ -145,7 +145,7 @@ def ai():
     return render_template('ai.html', result=result, error=error)
 
 
-def format_verification_results(data):
+def verification_results(data):
 
     if not data or 'claims' not in data:
         return "Не удалось получить результаты проверки"
@@ -161,7 +161,7 @@ def format_verification_results(data):
         ])
 
         if claim.get('explanation'):
-            lines.append(f"Пояснение: {claim['explanation']}")
+            lines.append(f"   Пояснение: {claim['explanation']}")
 
         if claim.get('sources'):
             lines.append("Источники:")
