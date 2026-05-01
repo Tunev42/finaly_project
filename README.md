@@ -27,14 +27,10 @@
 ## Быстрый старт
 
 1. Клонируйте репозиторий:
-      bash
    git clone https://github.com/Tunev42/Fact_Checker.git
    cd Fact_Checker
-
 2. Установите зависимости:
-   bash
-   
-pip install flask flask-sqlalchemy werkzeug python-dotenv
+   pip install flask flask-sqlalchemy werkzeug python-dotenv
 
 3. Запустите приложение:
       bash
@@ -52,5 +48,5 @@ templates/ — HTML-шаблоны
 
 factcheck.py — логика проверки фактов
 
-## 🖥 Интерфейс
+## Интерфейс
 ![Главная страница](screenshot.png)
