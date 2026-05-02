@@ -45,6 +45,6 @@ pip install flask flask-sqlalchemy werkzeug python-dotenv
 python app.py
 ```
 
-## Главный экран(scrennshot.png)
-
 4. Откройте в браузере: http://127.0.0.1:5000
+
+5. ## Главный экран(scrennshot.png)
